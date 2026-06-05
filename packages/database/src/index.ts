@@ -1,5 +1,2 @@
-/**
- * Prisma client export — populated after `pnpm db:generate`.
- * Import only from backend (never from frontend).
- */
-export type DatabasePackageReady = true;
+export { PrismaClient } from "@prisma/client";
+export type * from "@prisma/client";
