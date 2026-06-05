@@ -1,0 +1,40 @@
+{
+  "name": "assetsmarket",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Digital asset marketplace and advertising platform monorepo",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:frontend": "turbo run dev --filter=@assetsmarket/frontend",
+    "dev:backend": "turbo run dev --filter=@assetsmarket/backend",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "lint:root": "eslint .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "turbo run db:migrate",
+    "db:deploy": "turbo run db:deploy",
+    "db:studio": "pnpm --filter @assetsmarket/database db:studio",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "@assetsmarket/config-eslint": "workspace:*",
+    "@assetsmarket/config-typescript": "workspace:*",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

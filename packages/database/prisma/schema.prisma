@@ -1,0 +1,647 @@
+// =============================================================================
+// AssetsMarket — Production PostgreSQL 17 Schema
+// Modular monolith data layer. Maps 1:1 to backend domain modules.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums — sync values with @assetsmarket/shared/constants when implemented
+// -----------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum AssetStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  UNDER_CONTRACT
+  SOLD
+  ARCHIVED
+}
+
+enum VerificationStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum AdProductStatus {
+  ACTIVE
+  INACTIVE
+  SOLD_OUT
+}
+
+enum PricingModel {
+  FIXED
+  CPM
+  CPC
+  WEEKLY
+  MONTHLY
+  PER_EVENT
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionType {
+  PAYMENT
+  REFUND
+  PAYOUT
+  PLATFORM_FEE
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum EscrowStatus {
+  PENDING_FUNDING
+  FUNDED
+  RELEASED
+  REFUNDED
+  DISPUTED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum DisputeResolution {
+  BUYER_FAVOR
+  SELLER_FAVOR
+  SPLIT
+  CANCELLED
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+  FLAGGED
+}
+
+enum MetricType {
+  IMPRESSIONS
+  CLICKS
+  VIEWS
+  ENGAGEMENT_RATE
+}
+
+enum ConversationType {
+  DIRECT
+  BOOKING
+}
+
+enum NotificationType {
+  BOOKING
+  MESSAGE
+  PAYMENT
+  SYSTEM
+  REVIEW
+  VERIFICATION
+}
+
+enum AdminActionType {
+  SUSPEND_USER
+  UNSUSPEND_USER
+  REMOVE_ASSET
+  RESTORE_ASSET
+  APPROVE_VERIFICATION
+  REJECT_VERIFICATION
+  ASSIGN_DISPUTE
+  RESOLVE_DISPUTE
+  HIDE_REVIEW
+}
+
+// -----------------------------------------------------------------------------
+// Identity
+// -----------------------------------------------------------------------------
+
+/// Core authentication identity. Credentials and account lifecycle only.
+/// Profile data lives in UserProfile; permissions in UserRole.
+model User {
+  id            String     @id @default(uuid()) @db.Uuid
+  email         String     @unique @db.VarChar(320)
+  passwordHash  String?    @map("password_hash") @db.VarChar(255)
+  status        UserStatus @default(ACTIVE)
+  emailVerified DateTime?  @map("email_verified_at") @db.Timestamptz(6)
+  lastLoginAt   DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  profile       UserProfile?
+  roles         UserRole[]
+  ownedAssets   Asset[]                @relation("AssetOwner")
+  campaigns     Campaign[]             @relation("CampaignAdvertiser")
+  bookingsAsAdvertiser Booking[]       @relation("BookingAdvertiser")
+  bookingsAsSeller     Booking[]       @relation("BookingSeller")
+  verificationsReviewed AssetVerification[] @relation("VerificationReviewer")
+  transactionsAsPayer  Transaction[]  @relation("TransactionPayer")
+  transactionsAsPayee  Transaction[]  @relation("TransactionPayee")
+  disputesOpened       Dispute[]      @relation("DisputeOpener")
+  reviewsAuthored      Review[]       @relation("ReviewAuthor")
+  reviewsReceived      Review[]       @relation("ReviewTarget")
+  conversations        ConversationParticipant[]
+  messagesSent         Message[]      @relation("MessageSender")
+  notifications        Notification[]
+  adminActions         AdminAction[]  @relation("AdminActor")
+  auditLogs            AuditLog[]     @relation("AuditActor")
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+/// Public-facing profile and seller/advertiser display metadata.
+/// 1:1 with User — keeps auth table narrow and cache-friendly.
+model UserProfile {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @unique @map("user_id") @db.Uuid
+  displayName String    @map("display_name") @db.VarChar(120)
+  bio         String?   @db.Text
+  avatarUrl   String?   @map("avatar_url") @db.VarChar(2048)
+  companyName String?   @map("company_name") @db.VarChar(200)
+  website     String?   @db.VarChar(2048)
+  location    String?   @db.VarChar(200)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([displayName])
+  @@map("user_profiles")
+}
+
+/// RBAC role catalog — seeded reference data (SELLER, ADVERTISER, BUYER, ADMIN).
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(80)
+  slug        String   @unique @db.VarChar(40)
+  description String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users UserRole[]
+
+  @@map("roles")
+}
+
+/// User ↔ Role assignment. Supports multiple roles per user (e.g. seller + advertiser).
+model UserRole {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// -----------------------------------------------------------------------------
+// Assets
+// -----------------------------------------------------------------------------
+
+/// Hierarchical marketplace taxonomy (Outdoor, Digital, Audio, etc.).
+model AssetCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(120)
+  slug      String   @unique @db.VarChar(80)
+  parentId  String?  @map("parent_id") @db.Uuid
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent   AssetCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children AssetCategory[] @relation("CategoryTree")
+  assets   Asset[]
+
+  @@index([parentId, sortOrder])
+  @@map("asset_categories")
+}
+
+/// Marketplace listing — the sellable advertising inventory container.
+/// Purchasable units and pricing live on AdProduct, not duplicated here.
+model Asset {
+  id           String      @id @default(uuid()) @db.Uuid
+  ownerId      String      @map("owner_id") @db.Uuid
+  categoryId   String      @map("category_id") @db.Uuid
+  title        String      @db.VarChar(200)
+  slug         String      @unique @db.VarChar(220)
+  description  String      @db.Text
+  status       AssetStatus @default(DRAFT)
+  location     String?     @db.VarChar(255)
+  previewUrl   String?     @map("preview_url") @db.VarChar(2048)
+  media        Json?       @db.JsonB
+  publishedAt  DateTime?   @map("published_at") @db.Timestamptz(6)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime?   @map("deleted_at") @db.Timestamptz(6)
+
+  owner        User                @relation("AssetOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  category     AssetCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  adProducts   AdProduct[]
+  metrics      AssetMetric[]
+  verifications AssetVerification[]
+  reviews      Review[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([ownerId, status])
+  @@index([categoryId, status])
+  @@index([deletedAt])
+  @@map("assets")
+}
+
+/// Time-series performance snapshots for an asset (impressions, clicks, etc.).
+/// Append-only metrics history — latest row per type queried for marketplace cards.
+model AssetMetric {
+  id          String     @id @default(uuid()) @db.Uuid
+  assetId     String     @map("asset_id") @db.Uuid
+  metricType  MetricType @map("metric_type")
+  value       Decimal    @db.Decimal(20, 4)
+  periodStart DateTime?  @map("period_start") @db.Timestamptz(6)
+  periodEnd   DateTime?  @map("period_end") @db.Timestamptz(6)
+  recordedAt  DateTime   @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, metricType, recordedAt(sort: Desc)])
+  @@index([assetId, recordedAt(sort: Desc)])
+  @@map("asset_metrics")
+}
+
+/// Trust verification workflow — evidence review separate from Asset.status lifecycle.
+/// Supports re-submission history (multiple rows per asset over time).
+model AssetVerification {
+  id           String             @id @default(uuid()) @db.Uuid
+  assetId      String             @map("asset_id") @db.Uuid
+  status       VerificationStatus @default(PENDING)
+  evidence     Json?              @db.JsonB
+  notes        String?            @db.Text
+  reviewerId   String?            @map("reviewer_id") @db.Uuid
+  submittedAt  DateTime           @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt   DateTime?          @map("reviewed_at") @db.Timestamptz(6)
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  asset    Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("VerificationReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([assetId, status, submittedAt(sort: Desc)])
+  @@index([status, submittedAt(sort: Desc)])
+  @@map("asset_verifications")
+}
+
+// -----------------------------------------------------------------------------
+// Advertising
+// -----------------------------------------------------------------------------
+
+/// Purchasable SKU on an asset — pricing tier, slot type, or package (weekly, CPM, etc.).
+/// Avoids duplicating listing content from Asset while enabling multiple offers per listing.
+model AdProduct {
+  id            String          @id @default(uuid()) @db.Uuid
+  assetId       String          @map("asset_id") @db.Uuid
+  name          String          @db.VarChar(200)
+  description   String?         @db.Text
+  pricingModel  PricingModel    @map("pricing_model")
+  basePrice     Decimal         @map("base_price") @db.Decimal(14, 2)
+  currency      String          @default("USD") @db.Char(3)
+  status        AdProductStatus @default(ACTIVE)
+  capacity      Int?
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?       @map("deleted_at") @db.Timestamptz(6)
+
+  asset    Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([assetId, status])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("ad_products")
+}
+
+/// Advertiser campaign container — budget and flight dates group related bookings.
+model Campaign {
+  id           String         @id @default(uuid()) @db.Uuid
+  advertiserId String         @map("advertiser_id") @db.Uuid
+  name         String         @db.VarChar(200)
+  description  String?        @db.Text
+  budget       Decimal        @db.Decimal(14, 2)
+  currency     String         @default("USD") @db.Char(3)
+  status       CampaignStatus @default(DRAFT)
+  startDate    DateTime?      @map("start_date") @db.Date
+  endDate      DateTime?      @map("end_date") @db.Date
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime?      @map("deleted_at") @db.Timestamptz(6)
+
+  advertiser User      @relation("CampaignAdvertiser", fields: [advertiserId], references: [id], onDelete: Restrict)
+  bookings   Booking[]
+
+  @@index([advertiserId, status])
+  @@index([status, startDate])
+  @@map("campaigns")
+}
+
+/// Slot reservation linking advertiser, seller, ad product, and date range.
+/// Denormalizes advertiserId/sellerId for dashboard queries without deep joins.
+model Booking {
+  id              String        @id @default(uuid()) @db.Uuid
+  referenceNumber String        @unique @map("reference_number") @db.VarChar(32)
+  campaignId      String?       @map("campaign_id") @db.Uuid
+  adProductId     String        @map("ad_product_id") @db.Uuid
+  advertiserId    String        @map("advertiser_id") @db.Uuid
+  sellerId        String        @map("seller_id") @db.Uuid
+  status          BookingStatus @default(PENDING_PAYMENT)
+  startDate       DateTime      @map("start_date") @db.Date
+  endDate         DateTime      @map("end_date") @db.Date
+  totalAmount     Decimal       @map("total_amount") @db.Decimal(14, 2)
+  currency        String        @default("USD") @db.Char(3)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  campaign         Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adProduct        AdProduct         @relation(fields: [adProductId], references: [id], onDelete: Restrict)
+  advertiser       User              @relation("BookingAdvertiser", fields: [advertiserId], references: [id], onDelete: Restrict)
+  seller           User              @relation("BookingSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  transactions     Transaction[]
+  escrow           EscrowTransaction?
+  reviews          Review[]
+  conversation     Conversation?
+
+  @@index([adProductId, startDate, endDate])
+  @@index([advertiserId, status, createdAt(sort: Desc)])
+  @@index([sellerId, status, createdAt(sort: Desc)])
+  @@index([status, startDate])
+  @@map("bookings")
+}
+
+// -----------------------------------------------------------------------------
+// Commerce
+// -----------------------------------------------------------------------------
+
+/// Financial ledger entry — payments, refunds, payouts, platform fees.
+/// Immutable amounts; status transitions only. Multiple transactions per booking allowed.
+model Transaction {
+  id              String            @id @default(uuid()) @db.Uuid
+  bookingId       String?           @map("booking_id") @db.Uuid
+  payerId         String            @map("payer_id") @db.Uuid
+  payeeId         String            @map("payee_id") @db.Uuid
+  type            TransactionType
+  status          TransactionStatus @default(PENDING)
+  amount          Decimal           @db.Decimal(14, 2)
+  platformFee     Decimal           @default(0) @map("platform_fee") @db.Decimal(14, 2)
+  currency        String            @default("USD") @db.Char(3)
+  provider        String?           @db.VarChar(40)
+  externalId      String?           @unique @map("external_id") @db.VarChar(255)
+  idempotencyKey  String?           @unique @map("idempotency_key") @db.VarChar(128)
+  metadata        Json?             @db.JsonB
+  completedAt     DateTime?         @map("completed_at") @db.Timestamptz(6)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking          Booking?            @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  payer            User                @relation("TransactionPayer", fields: [payerId], references: [id], onDelete: Restrict)
+  payee            User                @relation("TransactionPayee", fields: [payeeId], references: [id], onDelete: Restrict)
+  escrowFunding    EscrowTransaction?  @relation("EscrowFundingTx")
+  escrowRelease    EscrowTransaction?  @relation("EscrowReleaseTx")
+
+  @@index([bookingId, type])
+  @@index([payerId, status, createdAt(sort: Desc)])
+  @@index([payeeId, status, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("transactions")
+}
+
+/// Escrow hold lifecycle — one escrow record per booking.
+/// Links to funding/release transactions without duplicating ledger rows.
+model EscrowTransaction {
+  id                   String       @id @default(uuid()) @db.Uuid
+  bookingId            String       @unique @map("booking_id") @db.Uuid
+  status               EscrowStatus @default(PENDING_FUNDING)
+  amount               Decimal      @db.Decimal(14, 2)
+  currency             String       @default("USD") @db.Char(3)
+  fundingTransactionId String?      @unique @map("funding_transaction_id") @db.Uuid
+  releaseTransactionId String?      @unique @map("release_transaction_id") @db.Uuid
+  fundedAt             DateTime?    @map("funded_at") @db.Timestamptz(6)
+  releasedAt           DateTime?    @map("released_at") @db.Timestamptz(6)
+  refundedAt           DateTime?    @map("refunded_at") @db.Timestamptz(6)
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking            Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  fundingTransaction Transaction? @relation("EscrowFundingTx", fields: [fundingTransactionId], references: [id], onDelete: SetNull)
+  releaseTransaction Transaction? @relation("EscrowReleaseTx", fields: [releaseTransactionId], references: [id], onDelete: SetNull)
+  disputes           Dispute[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("escrow_transactions")
+}
+
+/// Post-booking dispute on held funds. Tied to escrow, not a duplicate of Transaction.
+/// Resolve booking context via EscrowTransaction.bookingId.
+model Dispute {
+  id                  String             @id @default(uuid()) @db.Uuid
+  escrowTransactionId String             @map("escrow_transaction_id") @db.Uuid
+  openedById          String             @map("opened_by_id") @db.Uuid
+  status              DisputeStatus      @default(OPEN)
+  resolution          DisputeResolution?
+  reason              String             @db.Text
+  resolutionNotes     String?            @map("resolution_notes") @db.Text
+  resolvedAt          DateTime?          @map("resolved_at") @db.Timestamptz(6)
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  escrow EscrowTransaction @relation(fields: [escrowTransactionId], references: [id], onDelete: Restrict)
+  opener User              @relation("DisputeOpener", fields: [openedById], references: [id], onDelete: Restrict)
+
+  @@index([escrowTransactionId, status])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("disputes")
+}
+
+// -----------------------------------------------------------------------------
+// Trust
+// -----------------------------------------------------------------------------
+
+/// Verified-purchase review after completed booking. One review per author per booking.
+model Review {
+  id           String       @id @default(uuid()) @db.Uuid
+  bookingId    String       @map("booking_id") @db.Uuid
+  authorId     String       @map("author_id") @db.Uuid
+  targetUserId String       @map("target_user_id") @db.Uuid
+  assetId      String       @map("asset_id") @db.Uuid
+  rating       Int
+  comment      String?      @db.Text
+  status       ReviewStatus @default(PUBLISHED)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  author     User    @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  targetUser User    @relation("ReviewTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  asset      Asset   @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@unique([bookingId, authorId])
+  @@index([assetId, status, createdAt(sort: Desc)])
+  @@index([targetUserId, status, createdAt(sort: Desc)])
+  @@map("reviews")
+}
+
+// -----------------------------------------------------------------------------
+// Messaging
+// -----------------------------------------------------------------------------
+
+/// Conversation thread — direct or booking-scoped. lastMessageAt denormalized for inbox sort.
+model Conversation {
+  id            String           @id @default(uuid()) @db.Uuid
+  type          ConversationType @default(DIRECT)
+  subject       String?          @db.VarChar(200)
+  bookingId     String?          @unique @map("booking_id") @db.Uuid
+  lastMessageAt DateTime?        @map("last_message_at") @db.Timestamptz(6)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking      Booking?                  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([type, lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+/// Per-user membership and read cursor — enables inbox queries without scanning messages.
+model ConversationParticipant {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  lastReadAt     DateTime? @map("last_read_at") @db.Timestamptz(6)
+  joinedAt       DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, joinedAt(sort: Desc)])
+  @@map("conversation_participants")
+}
+
+/// Append-only message body. Soft-delete supports moderation without breaking thread integrity.
+model Message {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  senderId       String    @map("sender_id") @db.Uuid
+  body           String    @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([senderId, createdAt(sort: Desc)])
+  @@map("messages")
+}
+
+// -----------------------------------------------------------------------------
+// Platform
+// -----------------------------------------------------------------------------
+
+/// User-facing notification feed. Lightweight polymorphic entity reference for deep links.
+model Notification {
+  id         String           @id @default(uuid()) @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  type       NotificationType
+  title      String           @db.VarChar(200)
+  body       String           @db.Text
+  payload    Json?            @db.JsonB
+  entityType String?          @map("entity_type") @db.VarChar(60)
+  entityId   String?          @map("entity_id") @db.Uuid
+  readAt     DateTime?        @map("read_at") @db.Timestamptz(6)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+/// Curated admin moderation record — optimized for admin dashboard queries.
+/// Complements AuditLog; does not replace it.
+model AdminAction {
+  id         String          @id @default(uuid()) @db.Uuid
+  adminId    String          @map("admin_id") @db.Uuid
+  actionType AdminActionType @map("action_type")
+  targetType String          @map("target_type") @db.VarChar(60)
+  targetId   String          @map("target_id") @db.Uuid
+  reason     String?         @db.Text
+  metadata   Json?           @db.JsonB
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  admin User @relation("AdminActor", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId, createdAt(sort: Desc)])
+  @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@index([actionType, createdAt(sort: Desc)])
+  @@map("admin_actions")
+}
+
+/// Immutable compliance audit trail — append-only, never updated or soft-deleted.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(120)
+  entityType String   @map("entity_type") @db.VarChar(60)
+  entityId   String   @map("entity_id") @db.Uuid
+  changes    Json?    @db.JsonB
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(512)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}

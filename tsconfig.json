@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "frontend" },
+    { "path": "backend" },
+    { "path": "packages/shared" },
+    { "path": "packages/sdk" },
+    { "path": "packages/ui" },
+    { "path": "packages/database" }
+  ]
+}

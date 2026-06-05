@@ -1,0 +1,24 @@
+{
+  "name": "@assetsmarket/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"[backend] Wire: tsx watch src/index.ts\"",
+    "build": "echo \"[backend] Wire: tsc -p tsconfig.build.json\"",
+    "start": "echo \"[backend] Wire: node dist/index.js\"",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"[backend] Wire: vitest\"",
+    "clean": "rimraf dist .turbo tsconfig.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@assetsmarket/config-eslint": "workspace:*",
+    "@assetsmarket/config-typescript": "workspace:*",
+    "@types/node": "^22.10.2",
+    "eslint": "catalog:",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:"
+  }
+}

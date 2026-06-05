@@ -1,0 +1,34 @@
+{
+  "name": "@assetsmarket/database",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "prisma": {
+    "schema": "prisma/schema.prisma"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:push": "prisma db push",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "build": "prisma generate",
+    "clean": "rimraf dist node_modules/.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "catalog:"
+  },
+  "devDependencies": {
+    "@assetsmarket/config-eslint": "workspace:*",
+    "@assetsmarket/config-typescript": "workspace:*",
+    "eslint": "catalog:",
+    "prisma": "catalog:",
+    "rimraf": "^6.0.1",
+    "typescript": "catalog:"
+  }
+}

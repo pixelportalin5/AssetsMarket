@@ -1,0 +1,47 @@
+# Local development — PostgreSQL 17 + Redis 7 + Mailhog
+# Usage: docker compose -f infrastructure/docker/docker-compose.yml up -d
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: assetsmarket-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: assetsmarket
+      POSTGRES_PASSWORD: assetsmarket
+      POSTGRES_DB: assetsmarket
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assetsmarket -d assetsmarket"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: assetsmarket-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: assetsmarket-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  postgres_data:
+  redis_data:

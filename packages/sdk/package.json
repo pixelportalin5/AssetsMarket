@@ -1,0 +1,23 @@
+{
+  "name": "@assetsmarket/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "clean": "rimraf dist"
+  },
+  "devDependencies": {
+    "@assetsmarket/config-eslint": "workspace:*",
+    "@assetsmarket/config-typescript": "workspace:*",
+    "@assetsmarket/shared": "workspace:*",
+    "eslint": "catalog:",
+    "rimraf": "^6.0.1",
+    "typescript": "catalog:"
+  }
+}
