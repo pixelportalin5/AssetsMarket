@@ -1,7 +1,8 @@
 import type { RegisterableRoleSlug, RoleSlug } from "./auth.constants.js";
-import type { UserProfileDto } from "@/modules/users/users.dto.js";
+import type { UserMeDto } from "@/modules/users/users.dto.js";
 
-export type { UserProfileDto };
+/** Same shape as `UserMeDto` — used in auth responses. */
+export type AuthUserDto = UserMeDto;
 
 export interface AuthUser {
   id: string;
@@ -14,16 +15,6 @@ export interface AuthTokens {
   refreshToken: string;
   accessTokenExpiresIn: string;
   refreshTokenExpiresIn: string;
-}
-
-export interface AuthUserDto {
-  id: string;
-  email: string;
-  status: string;
-  roles: RoleSlug[];
-  profile: UserProfileDto | null;
-  createdAt: string;
-  lastLoginAt: string | null;
 }
 
 export interface AuthResponseDto {

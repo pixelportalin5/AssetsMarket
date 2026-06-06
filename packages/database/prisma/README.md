@@ -1,7 +1,7 @@
-# Prisma directory
+# Prisma schema
 
-Migrations and schema files will live here when the database layer is implemented.
+Production schema lives in `schema.prisma`. Migrations are in `migrations/`.
 
-Refer to the PostgreSQL architecture plan for entity design.
+Run database commands from the repo root via `@assetsmarket/database` (uses `backend/.env`).
 
-**This scaffold intentionally contains no `.prisma` models.**
+Supplemental SQL notes: `MIGRATION_NOTES.sql`.

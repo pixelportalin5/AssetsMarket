@@ -1,7 +1,6 @@
 import { Router, type Router as RouterType } from "express";
 
-import { authenticate } from "@/middleware/authenticate.js";
-import { validate } from "@/middleware/validate.js";
+import { authenticate, validate } from "@/middleware/index.js";
 
 import {
   login,

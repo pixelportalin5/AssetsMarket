@@ -1,1 +1,1 @@
-export const SHARED_PACKAGE_READY = true as const;
+export * from "./constants/index.js";

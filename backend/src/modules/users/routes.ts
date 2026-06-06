@@ -1,7 +1,6 @@
 import { Router, type Router as RouterType } from "express";
 
-import { authenticate } from "@/middleware/authenticate.js";
-import { validate } from "@/middleware/validate.js";
+import { authenticate, validate } from "@/middleware/index.js";
 
 import { getById, getMe, updateMe } from "./users.controller.js";
 import { updateProfileSchema, userIdParamSchema } from "./users.validators.js";

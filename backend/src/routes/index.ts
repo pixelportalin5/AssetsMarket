@@ -3,6 +3,7 @@ import { Router } from "express";
 
 import { env } from "@/config/env.js";
 import { registerAuthModule } from "@/modules/auth/index.js";
+import { registerAssetsModule } from "@/modules/assets/index.js";
 import { registerUsersModule } from "@/modules/users/index.js";
 
 import { healthRouter } from "./health.routes.js";
@@ -13,6 +14,7 @@ export function registerRoutes(app: Express): void {
   const apiRouter = Router();
   registerAuthModule(apiRouter);
   registerUsersModule(apiRouter);
+  registerAssetsModule(apiRouter);
 
   app.use(env.API_PREFIX, apiRouter);
 }

@@ -1,2 +1,8 @@
-export { Prisma, PrismaClient, UserStatus } from "@prisma/client";
+export {
+  AssetStatus,
+  Prisma,
+  PrismaClient,
+  UserStatus,
+  VerificationStatus,
+} from "@prisma/client";
 export type * from "@prisma/client";

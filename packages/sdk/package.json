@@ -15,7 +15,6 @@
   "devDependencies": {
     "@assetsmarket/config-eslint": "workspace:*",
     "@assetsmarket/config-typescript": "workspace:*",
-    "@assetsmarket/shared": "workspace:*",
     "eslint": "catalog:",
     "rimraf": "^6.0.1",
     "typescript": "catalog:"

@@ -1,23 +1,28 @@
 ﻿# Module: Assets
 
-Asset listings CRUD, categories, metrics, publish lifecycle, marketplace search.
+Marketplace Core — asset listings CRUD, publish lifecycle, marketplace browse.
+
+## Routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/assets` | Public | Browse published assets |
+| `GET` | `/assets/my` | Seller | List own assets |
+| `GET` | `/assets/:id` | Optional | Public detail or owner manage view |
+| `POST` | `/assets` | Seller | Create draft |
+| `PATCH` | `/assets/:id` | Seller | Update owned asset |
+| `DELETE` | `/assets/:id` | Seller | Soft delete |
+| `POST` | `/assets/:id/publish` | Seller | Publish draft |
+| `POST` | `/assets/:id/archive` | Seller | Archive asset |
 
 ## Layer structure
 
 | Layer | Responsibility |
 |-------|----------------|
-| `controllers/` | HTTP handlers — parse request, invoke service, return DTO |
-| `services/` | Business rules, transactions, emit domain events |
-| `repositories/` | Prisma queries only |
-| `dto/` | Request/response TypeScript types |
-| `validators/` | Zod schemas (prefer `@assetsmarket/shared`) |
+| `assets.controller.ts` | HTTP handlers |
+| `assets.service.ts` | Business rules, state transitions |
+| `assets.repository.ts` | Asset Prisma queries |
+| `categories.repository.ts` | Category seed + validation |
+| `assets.dto.ts` / `assets.validators.ts` | Types + Zod |
 
-## Boundaries
-
-- No cross-module Prisma access — call other modules via their **service** export
-- No HTTP types in repositories
-
-## Routes
-
-Not defined in this scaffold. Register in module `index.ts` when implemented.
-
+Shared mapping/includes: `backend/src/lib/assets/`

@@ -1,6 +1,6 @@
 import type { UserProfile } from "@assetsmarket/database";
 
-import type { UserProfileDto } from "@/modules/users/users.dto.js";
+import type { UserMeDto, UserProfileDto } from "@/modules/users/users.dto.js";
 import type { RoleSlug } from "@/modules/auth/auth.constants.js";
 import type { UserWithProfile } from "./user.types.js";
 
@@ -24,6 +24,18 @@ export function mapProfileToDto(profile: UserProfile | null): UserProfileDto | n
 
 export function extractRoleSlugs(user: UserWithProfile): RoleSlug[] {
   return user.roles.map((entry) => entry.role.slug as RoleSlug);
+}
+
+export function mapUserToMeDto(user: UserWithProfile): UserMeDto {
+  return {
+    id: user.id,
+    email: user.email,
+    status: user.status,
+    roles: extractRoleSlugs(user),
+    profile: mapProfileToDto(user.profile),
+    createdAt: user.createdAt.toISOString(),
+    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+  };
 }
 
 export function buildDisplayName(input: {

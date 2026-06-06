@@ -23,13 +23,12 @@ enum UserStatus {
   DEACTIVATED
 }
 
+/// Listing visibility lifecycle. Inventory lock states live on AdProduct/Booking — not here.
 enum AssetStatus {
   DRAFT
-  PENDING_REVIEW
   PUBLISHED
-  UNDER_CONTRACT
-  SOLD
   ARCHIVED
+  SUSPENDED
 }
 
 enum VerificationStatus {
@@ -267,6 +266,7 @@ model AssetCategory {
   name      String   @db.VarChar(120)
   slug      String   @unique @db.VarChar(80)
   parentId  String?  @map("parent_id") @db.Uuid
+  isActive  Boolean  @default(true) @map("is_active")
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -275,18 +275,20 @@ model AssetCategory {
   children AssetCategory[] @relation("CategoryTree")
   assets   Asset[]
 
-  @@index([parentId, sortOrder])
+  @@index([isActive, parentId, sortOrder])
   @@map("asset_categories")
 }
 
 /// Marketplace listing — the sellable advertising inventory container.
 /// Purchasable units and pricing live on AdProduct, not duplicated here.
+/// Verification (AssetVerification) is a trust badge only — not required to publish.
+/// Slug uniqueness among active rows enforced via partial DB index (see migrations).
 model Asset {
   id           String      @id @default(uuid()) @db.Uuid
   ownerId      String      @map("owner_id") @db.Uuid
   categoryId   String      @map("category_id") @db.Uuid
   title        String      @db.VarChar(200)
-  slug         String      @unique @db.VarChar(220)
+  slug         String      @db.VarChar(220)
   description  String      @db.Text
   status       AssetStatus @default(DRAFT)
   location     String?     @db.VarChar(255)
@@ -297,13 +299,15 @@ model Asset {
   updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt    DateTime?   @map("deleted_at") @db.Timestamptz(6)
 
-  owner        User                @relation("AssetOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  category     AssetCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  adProducts   AdProduct[]
-  metrics      AssetMetric[]
+  owner         User                @relation("AssetOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  category      AssetCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  adProducts    AdProduct[]
+  metrics       AssetMetric[]
   verifications AssetVerification[]
-  reviews      Review[]
+  reviews       Review[]
+  bookings      Booking[]
 
+  @@index([slug])
   @@index([status, publishedAt(sort: Desc)])
   @@index([ownerId, status])
   @@index([categoryId, status])
@@ -332,6 +336,8 @@ model AssetMetric {
 
 /// Trust verification workflow — evidence review separate from Asset.status lifecycle.
 /// Supports re-submission history (multiple rows per asset over time).
+/// Approval is a marketplace trust badge only; it does not gate publishing.
+/// At most one PENDING or IN_REVIEW row per asset (partial unique index in migrations).
 model AssetVerification {
   id           String             @id @default(uuid()) @db.Uuid
   assetId      String             @map("asset_id") @db.Uuid
@@ -349,6 +355,7 @@ model AssetVerification {
 
   @@index([assetId, status, submittedAt(sort: Desc)])
   @@index([status, submittedAt(sort: Desc)])
+  @@index([reviewerId, status, submittedAt(sort: Desc)])
   @@map("asset_verifications")
 }
 
@@ -387,8 +394,9 @@ model Campaign {
   name         String         @db.VarChar(200)
   description  String?        @db.Text
   budget       Decimal        @db.Decimal(14, 2)
-  currency     String         @default("USD") @db.Char(3)
-  status       CampaignStatus @default(DRAFT)
+  committedAmount Decimal        @default(0) @map("committed_amount") @db.Decimal(14, 2)
+  currency        String           @default("USD") @db.Char(3)
+  status          CampaignStatus   @default(DRAFT)
   startDate    DateTime?      @map("start_date") @db.Date
   endDate      DateTime?      @map("end_date") @db.Date
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -404,24 +412,27 @@ model Campaign {
 }
 
 /// Slot reservation linking advertiser, seller, ad product, and date range.
-/// Denormalizes advertiserId/sellerId for dashboard queries without deep joins.
+/// Denormalizes assetId/advertiserId/sellerId for dashboard queries without deep joins.
 model Booking {
   id              String        @id @default(uuid()) @db.Uuid
   referenceNumber String        @unique @map("reference_number") @db.VarChar(32)
   campaignId      String?       @map("campaign_id") @db.Uuid
   adProductId     String        @map("ad_product_id") @db.Uuid
+  assetId         String        @map("asset_id") @db.Uuid
   advertiserId    String        @map("advertiser_id") @db.Uuid
   sellerId        String        @map("seller_id") @db.Uuid
   status          BookingStatus @default(PENDING_PAYMENT)
   startDate       DateTime      @map("start_date") @db.Date
   endDate         DateTime      @map("end_date") @db.Date
-  totalAmount     Decimal       @map("total_amount") @db.Decimal(14, 2)
-  currency        String        @default("USD") @db.Char(3)
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  totalAmount      Decimal       @map("total_amount") @db.Decimal(14, 2)
+  currency         String        @default("USD") @db.Char(3)
+  paymentExpiresAt DateTime?     @map("payment_expires_at") @db.Timestamptz(6)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   campaign         Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   adProduct        AdProduct         @relation(fields: [adProductId], references: [id], onDelete: Restrict)
+  asset            Asset             @relation(fields: [assetId], references: [id], onDelete: Restrict)
   advertiser       User              @relation("BookingAdvertiser", fields: [advertiserId], references: [id], onDelete: Restrict)
   seller           User              @relation("BookingSeller", fields: [sellerId], references: [id], onDelete: Restrict)
   transactions     Transaction[]
@@ -430,6 +441,8 @@ model Booking {
   conversation     Conversation?
 
   @@index([adProductId, startDate, endDate])
+  @@index([campaignId, status, createdAt(sort: Desc)])
+  @@index([assetId, status, createdAt(sort: Desc)])
   @@index([advertiserId, status, createdAt(sort: Desc)])
   @@index([sellerId, status, createdAt(sort: Desc)])
   @@index([status, startDate])
@@ -465,6 +478,7 @@ model Transaction {
   payee            User                @relation("TransactionPayee", fields: [payeeId], references: [id], onDelete: Restrict)
   escrowFunding    EscrowTransaction?  @relation("EscrowFundingTx")
   escrowRelease    EscrowTransaction?  @relation("EscrowReleaseTx")
+  escrowRefund     EscrowTransaction?  @relation("EscrowRefundTx")
 
   @@index([bookingId, type])
   @@index([payerId, status, createdAt(sort: Desc)])
@@ -483,6 +497,7 @@ model EscrowTransaction {
   currency             String       @default("USD") @db.Char(3)
   fundingTransactionId String?      @unique @map("funding_transaction_id") @db.Uuid
   releaseTransactionId String?      @unique @map("release_transaction_id") @db.Uuid
+  refundTransactionId  String?      @unique @map("refund_transaction_id") @db.Uuid
   fundedAt             DateTime?    @map("funded_at") @db.Timestamptz(6)
   releasedAt           DateTime?    @map("released_at") @db.Timestamptz(6)
   refundedAt           DateTime?    @map("refunded_at") @db.Timestamptz(6)
@@ -492,6 +507,7 @@ model EscrowTransaction {
   booking            Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   fundingTransaction Transaction? @relation("EscrowFundingTx", fields: [fundingTransactionId], references: [id], onDelete: SetNull)
   releaseTransaction Transaction? @relation("EscrowReleaseTx", fields: [releaseTransactionId], references: [id], onDelete: SetNull)
+  refundTransaction  Transaction? @relation("EscrowRefundTx", fields: [refundTransactionId], references: [id], onDelete: SetNull)
   disputes           Dispute[]
 
   @@index([status, createdAt(sort: Desc)])

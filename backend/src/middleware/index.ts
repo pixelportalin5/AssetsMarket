@@ -1,4 +1,4 @@
-export { authenticate, authorize } from "./authenticate.js";
+export { authenticate, authorize, optionalAuthenticate } from "./authenticate.js";
 export { errorHandler } from "./error-handler.js";
 export { notFound } from "./not-found.js";
 export { REQUEST_ID_HEADER, requestId } from "./request-id.js";

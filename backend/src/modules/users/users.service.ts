@@ -1,7 +1,6 @@
-import { UserStatus } from "@assetsmarket/database";
-
 import { AppError } from "@/lib/errors.js";
-import { extractRoleSlugs, mapProfileToDto } from "@/lib/users/user.mapper.js";
+import { assertActiveAccount, assertPublicActiveUser } from "@/lib/users/user.guards.js";
+import { extractRoleSlugs, mapProfileToDto, mapUserToMeDto } from "@/lib/users/user.mapper.js";
 
 import type { PublicUserDto, UpdateProfileInput, UserMeDto } from "./users.dto.js";
 import { usersRepository } from "./users.repository.js";
@@ -17,14 +16,14 @@ export class UsersService {
       });
     }
 
-    this.assertActiveAccount(user.status);
+    assertActiveAccount(user.status);
 
-    return this.mapMe(user);
+    return mapUserToMeDto(user);
   }
 
   async updateMe(userId: string, input: UpdateProfileInput): Promise<UserMeDto> {
     const user = await usersRepository.updateProfile(userId, input);
-    return this.mapMe(user);
+    return mapUserToMeDto(user);
   }
 
   async getById(userId: string): Promise<PublicUserDto> {
@@ -37,53 +36,14 @@ export class UsersService {
       });
     }
 
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new AppError("User not found", {
-        statusCode: 404,
-        code: "USER_NOT_FOUND",
-      });
-    }
+    assertPublicActiveUser(user.status);
 
-    return this.mapPublic(user);
-  }
-
-  private mapMe(user: NonNullable<Awaited<ReturnType<typeof usersRepository.findById>>>): UserMeDto {
-    return {
-      id: user.id,
-      email: user.email,
-      status: user.status,
-      roles: extractRoleSlugs(user),
-      profile: mapProfileToDto(user.profile),
-      createdAt: user.createdAt.toISOString(),
-      lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-    };
-  }
-
-  private mapPublic(
-    user: NonNullable<Awaited<ReturnType<typeof usersRepository.findById>>>,
-  ): PublicUserDto {
     return {
       id: user.id,
       roles: extractRoleSlugs(user),
       profile: mapProfileToDto(user.profile),
       createdAt: user.createdAt.toISOString(),
     };
-  }
-
-  private assertActiveAccount(status: UserStatus): void {
-    if (status === UserStatus.SUSPENDED) {
-      throw new AppError("Account is suspended", {
-        statusCode: 403,
-        code: "ACCOUNT_SUSPENDED",
-      });
-    }
-
-    if (status === UserStatus.DEACTIVATED) {
-      throw new AppError("Account is deactivated", {
-        statusCode: 403,
-        code: "ACCOUNT_DEACTIVATED",
-      });
-    }
   }
 }
 

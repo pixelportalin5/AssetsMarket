@@ -1,8 +1,7 @@
-import { UserStatus } from "@assetsmarket/database";
-
 import { AppError } from "@/lib/errors.js";
 import { env } from "@/config/env.js";
-import { extractRoleSlugs, mapProfileToDto } from "@/lib/users/user.mapper.js";
+import { assertActiveAccount } from "@/lib/users/user.guards.js";
+import { extractRoleSlugs, mapUserToMeDto } from "@/lib/users/user.mapper.js";
 import { findActiveUserById } from "@/lib/users/user.repository.js";
 import type { UserWithProfile } from "@/lib/users/user.types.js";
 
@@ -50,7 +49,7 @@ export class AuthService {
       });
     }
 
-    this.assertUserCanAuthenticate(user.status);
+    assertActiveAccount(user.status);
 
     const valid = await verifyPassword(input.password, user.passwordHash);
 
@@ -85,7 +84,7 @@ export class AuthService {
       });
     }
 
-    this.assertUserCanAuthenticate(stored.user.status);
+    assertActiveAccount(stored.user.status);
 
     const newRefreshToken = generateRefreshToken();
     const expiresAt = getRefreshTokenExpiry();
@@ -105,7 +104,7 @@ export class AuthService {
     });
 
     return {
-      user: this.mapUser(stored.user),
+      user: mapUserToMeDto(stored.user),
       tokens: {
         accessToken,
         refreshToken: newRefreshToken,
@@ -144,7 +143,7 @@ export class AuthService {
     });
 
     return {
-      user: this.mapUser(user),
+      user: mapUserToMeDto(user),
       tokens: {
         accessToken,
         refreshToken,
@@ -152,34 +151,6 @@ export class AuthService {
         refreshTokenExpiresIn: env.JWT_REFRESH_EXPIRES_IN,
       },
     };
-  }
-
-  private mapUser(user: UserWithProfile): AuthUserDto {
-    return {
-      id: user.id,
-      email: user.email,
-      status: user.status,
-      roles: extractRoleSlugs(user),
-      profile: mapProfileToDto(user.profile),
-      createdAt: user.createdAt.toISOString(),
-      lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-    };
-  }
-
-  private assertUserCanAuthenticate(status: UserStatus): void {
-    if (status === UserStatus.SUSPENDED) {
-      throw new AppError("Account is suspended", {
-        statusCode: 403,
-        code: "ACCOUNT_SUSPENDED",
-      });
-    }
-
-    if (status === UserStatus.DEACTIVATED) {
-      throw new AppError("Account is deactivated", {
-        statusCode: 403,
-        code: "ACCOUNT_DEACTIVATED",
-      });
-    }
   }
 }
 
