@@ -10,14 +10,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
-    "db:studio": "prisma studio",
-    "db:push": "prisma db push",
+    "db:generate": "dotenv -e ../../backend/.env -- prisma generate",
+    "db:migrate": "dotenv -e ../../backend/.env -- prisma migrate dev",
+    "db:deploy": "dotenv -e ../../backend/.env -- prisma migrate deploy",
+    "db:studio": "dotenv -e ../../backend/.env -- prisma studio",
+    "db:push": "dotenv -e ../../backend/.env -- prisma db push",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "build": "prisma generate",
+    "build": "dotenv -e ../../backend/.env -- prisma generate",
     "clean": "rimraf dist node_modules/.prisma"
   },
   "dependencies": {
@@ -26,6 +26,7 @@
   "devDependencies": {
     "@assetsmarket/config-eslint": "workspace:*",
     "@assetsmarket/config-typescript": "workspace:*",
+    "dotenv-cli": "^8.0.0",
     "eslint": "catalog:",
     "prisma": "catalog:",
     "rimraf": "^6.0.1",

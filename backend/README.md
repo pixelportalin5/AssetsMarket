@@ -30,9 +30,8 @@ HTTP Request
 | `src/integrations/` | External systems (S3, SES, Stripe, Redis) |
 | `src/events/` | In-process domain events + handlers |
 | `src/jobs/` | BullMQ queue definitions & workers |
-| `src/config/` | Env validation (Zod) |
-| `src/logging/` | Structured logger (pino) |
-| `src/database/` | Prisma singleton bootstrap |
+| `src/config/` | Zod env validation (`env.ts`) — loads `backend/.env` |
+| `src/lib/` | Prisma client, logger, shared errors |
 | `tests/unit/` | Service & validator tests (mocked repos) |
 | `tests/integration/` | HTTP + real Postgres (Docker) |
 
@@ -47,4 +46,4 @@ See [src/modules/README.md](src/modules/README.md).
 - **API process** — serves HTTP
 - **Worker process** — consumes `src/jobs/` (same repo, different entry)
 
-No API endpoints defined in this scaffold.
+No API endpoints beyond auth and health in the current phase.

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { Router } from "express";
 
-import { env } from "@/config/index.js";
+import { env } from "@/config/env.js";
 import { registerAuthModule } from "@/modules/auth/index.js";
 import { registerUsersModule } from "@/modules/users/index.js";
 

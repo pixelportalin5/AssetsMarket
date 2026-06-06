@@ -48,14 +48,13 @@ AssetsMarket/
 
 ```bash
 pnpm install
-cp .env.example backend/.env    # and frontend/.env.local as needed
-pnpm docker:up                  # Postgres 17 + Redis + Mailhog
-pnpm db:generate                # Prisma client (schema has no models yet)
-pnpm typecheck
-pnpm lint
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+pnpm docker:up                  # Postgres 17 + Redis + Mailhog (optional)
+pnpm db:generate
+pnpm dev:backend                # http://localhost:4000/health
+pnpm dev:frontend               # http://localhost:3000
 ```
-
-Wire `dev` scripts in `frontend` and `backend` when application entrypoints are added.
 
 ## License
 

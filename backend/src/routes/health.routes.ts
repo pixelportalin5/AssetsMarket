@@ -1,6 +1,6 @@
 import { Router, type Router as RouterType } from "express";
 
-import { env } from "@/config/index.js";
+import { env } from "@/config/env.js";
 
 export const healthRouter: RouterType = Router();
 

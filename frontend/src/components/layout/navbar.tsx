@@ -1,17 +1,34 @@
 "use client";
 
-import { Menu, Sparkles, X } from "lucide-react";
+import { Loader2, LogOut, Menu, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { navLinks } from "@/data/mock";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/providers/auth-provider";
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const displayName = user?.profile?.displayName ?? user?.email ?? "Account";
+
+  async function handleLogout() {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      router.push("/");
+    } finally {
+      setIsLoggingOut(false);
+      setMobileOpen(false);
+    }
+  }
 
   return (
     <header className="glass-nav sticky top-0 z-50">
@@ -41,12 +58,31 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          <Button variant="ghost" asChild>
-            <Link href="/login">Log in</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/register">Get Started</Link>
-          </Button>
+          {isLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          ) : isAuthenticated ? (
+            <>
+              <span className="max-w-[160px] truncate text-sm text-muted-foreground">
+                {displayName}
+              </span>
+              <Button variant="ghost" asChild>
+                <Link href="/dashboard">Dashboard</Link>
+              </Button>
+              <Button variant="secondary" onClick={handleLogout} disabled={isLoggingOut}>
+                {isLoggingOut ? <Loader2 className="animate-spin" /> : <LogOut />}
+                Log out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" asChild>
+                <Link href="/login">Log in</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/register">Get Started</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         <Button
@@ -74,16 +110,43 @@ export function Navbar() {
               </Link>
             ))}
             <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4">
-              <Button variant="secondary" asChild>
-                <Link href="/login" onClick={() => setMobileOpen(false)}>
-                  Log in
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link href="/register" onClick={() => setMobileOpen(false)}>
-                  Get Started
-                </Link>
-              </Button>
+              {isLoading ? (
+                <div className="flex justify-center py-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : isAuthenticated ? (
+                <>
+                  <p className="px-3 text-sm text-muted-foreground">{displayName}</p>
+                  <Button variant="secondary" asChild>
+                    <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
+                      Dashboard
+                    </Link>
+                  </Button>
+                  <Button onClick={handleLogout} disabled={isLoggingOut}>
+                    {isLoggingOut ? (
+                      <>
+                        <Loader2 className="animate-spin" />
+                        Logging out...
+                      </>
+                    ) : (
+                      "Log out"
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="secondary" asChild>
+                    <Link href="/login" onClick={() => setMobileOpen(false)}>
+                      Log in
+                    </Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/register" onClick={() => setMobileOpen(false)}>
+                      Get Started
+                    </Link>
+                  </Button>
+                </>
+              )}
             </div>
           </nav>
         </div>

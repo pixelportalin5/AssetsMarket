@@ -1,6 +1,6 @@
 import { PrismaClient } from "@assetsmarket/database";
 
-import { env } from "@/config/index.js";
+import { env } from "@/config/env.js";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

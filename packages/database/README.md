@@ -2,22 +2,23 @@
 
 Prisma ORM — **PostgreSQL 17** — schema and migrations.
 
-## Responsibilities
+## Environment
 
-- `prisma/schema/` or `prisma/schema.prisma` (when implemented)
-- Migrations, seed (roles, categories)
-- Export `prisma` client singleton
+All Prisma commands load **`backend/.env`** (single source of truth). Do not create `packages/database/.env`.
+
+Required in `backend/.env`: `DATABASE_URL`, `DIRECT_URL`.
+
+## Commands
+
+```bash
+pnpm db:generate    # from repo root
+pnpm db:migrate
+pnpm db:studio
+```
 
 ## Consumers
 
-- `backend/src/database/` — wires client into app lifecycle
-- `backend/tests/integration/` — test DB
+- `backend/src/lib/prisma.ts` — runtime client singleton
 - **Not** frontend or sdk
 
-## Commands (planned)
-
-- `db:generate`, `db:migrate`, `db:deploy`, `db:seed`, `db:studio`
-
-Schema design documented in [docs/database/README.md](../../docs/database/README.md).
-
-**No Prisma models in this scaffold.**
+Schema: `prisma/schema.prisma`. Raw SQL notes: `prisma/MIGRATION_NOTES.sql`.

@@ -2,7 +2,7 @@ import cors from "cors";
 import express, { type Express } from "express";
 import helmet from "helmet";
 
-import { env } from "@/config/index.js";
+import { env } from "@/config/env.js";
 import { errorHandler, notFound, requestId, requestLogger } from "@/middleware/index.js";
 import { registerRoutes } from "@/routes/index.js";
 

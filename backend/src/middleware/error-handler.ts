@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 
-import { env } from "@/config/index.js";
+import { env } from "@/config/env.js";
 import { AppError, isAppError } from "@/lib/errors.js";
 import { logger } from "@/lib/logger.js";
 
@@ -30,6 +30,9 @@ export function errorHandler(
     error: {
       code: appError.code,
       message: appError.message,
+      ...(appError.code === "VALIDATION_ERROR" && appError.cause
+        ? { details: appError.cause }
+        : {}),
     },
     requestId: req.requestId,
   });
